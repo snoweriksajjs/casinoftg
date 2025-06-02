@@ -3,10 +3,10 @@ import asyncio
 from telethon.tl.types import PeerUser
 
 @loader.tds
-class AutoReplyOnceMod(loader.Module):
+class replyMod(loader.Module):
     """Автоответ в ЛС + реакция 💤 — только один раз каждому"""
 
-    strings = {"name": "AutoReplyOnce"}
+    strings = {"name": "reply"}
 
     def __init__(self):
         self.reply_enabled = True
@@ -14,15 +14,17 @@ class AutoReplyOnceMod(loader.Module):
         self.replied_users = set()
 
     async def watcher(self, message):
-        # Не обрабатываем исходящие сообщения и без sender_id
-        if message.out or not getattr(message, "sender_id", None):
-            return
-
-        # Только личные сообщения (PeerUser)
-        if not isinstance(message.to_id, PeerUser):
-            return
-
         if not self.reply_enabled:
+            return
+
+        if message.out:
+            return
+
+        if not message.is_private:
+            return
+
+        sender = await message.get_sender()
+        if sender.bot or sender.system:
             return
 
         if message.sender_id in self.replied_users:
@@ -30,16 +32,11 @@ class AutoReplyOnceMod(loader.Module):
 
         try:
             await asyncio.sleep(1)
-
-            # Ставим реакцию
             await message.react("💤")
-
-            # Отправляем ответ
             await message.reply(self.reply_text)
-
             self.replied_users.add(message.sender_id)
         except Exception as e:
-            print(f"[AutoReplyOnce] Ошибка: {e}")
+            pass  # Можно заменить на print(str(e)) для отладки
 
     async def setreplycmd(self, message):
         """Установить текст автоответа: .setreply <текст>"""
@@ -65,4 +62,4 @@ class AutoReplyOnceMod(loader.Module):
     async def resetreplycmd(self, message):
         """Сбросить список пользователей, которым уже отвечали"""
         self.replied_users.clear()
-        await message.edit("🔄 Список сброшен. Бот снова будет отвечать на первое сообщение.")
+        await message.edit("🔄 Список сброшен.")
