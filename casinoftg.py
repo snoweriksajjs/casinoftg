@@ -1,38 +1,40 @@
-
 from .. import loader
 import asyncio
-import re
 
 @loader.tds
-class SlotMachineMod(loader.Module):
-    """Автослоты: удаляет сообщения, пока не выпадет 3 одинаковых для заданного фрукта"""
+class TelegramSlotsMod(loader.Module):
+    """Кидает 🎰 до тех пор, пока не выпадет нужный результат"""
 
-    strings = {"name": "SlotMachine"}
+    strings = {"name": "RealSlots"}
 
     async def slotscmd(self, message):
-        """Использование: .slots fruit (например .slots 777 или .slots grape)"""
+        """Использование: .slots <число от 1 до 6> (например .slots 5 для 777)"""
         args = message.text.split(maxsplit=1)
-        if len(args) < 2:
-            await message.edit("Укажи фрукт или символ, например `.slots 777`")
+        if len(args) < 2 or not args[1].isdigit():
+            await message.edit("Укажи число от 1 до 6 (1=🍒, 5=777)")
             return
 
-        symbol = args[1]
-        chat = message.chat_id
+        target = int(args[1])
+        if target < 1 or target > 6:
+            await message.edit("Допустимые значения: 1–6")
+            return
+
         await message.delete()
+        prev_msg = None
 
         while True:
-            slot_msg = await message.client.send_message(chat, f".casino {symbol}")
-            await asyncio.sleep(1.0)
+            if prev_msg:
+                try:
+                    await prev_msg.delete()
+                except:
+                    pass
 
-            async for msg in message.client.iter_messages(chat, limit=5):
-                if msg.text and "🎰" in msg.text:
-                    match = re.findall(r"🎰 (.*?) 🎰", msg.raw_text)
-                    if match:
-                        parts = match[0].split(" ")
-                        if len(parts) == 3 and parts[0] == parts[1] == parts[2]:
-                            await msg.delete()
-                            await slot_msg.delete()
-                            return
-                    await msg.delete()
+            # Отправляем анимированный 🎰
+            dice_msg = await message.client.send_message(message.chat_id, file="🎰")
+            await asyncio.sleep(2)  # ждём завершения анимации
 
-            await slot_msg.delete()
+            if dice_msg.media and hasattr(dice_msg.media, "value"):
+                if dice_msg.media.value == target:
+                    break  # Оставляем победное сообщение
+
+            prev_msg = dice_msg
