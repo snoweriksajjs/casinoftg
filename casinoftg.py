@@ -1,5 +1,5 @@
 from .. import loader
-import asyncio
+import asynci
 
 @loader.tds
 class TelegramSlotsMod(loader.Module):
