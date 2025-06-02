@@ -1,65 +1,89 @@
+from telethon import events
 from .. import loader, utils
-import asyncio
-from telethon.tl.types import PeerUser
 
 @loader.tds
-class replyMod(loader.Module):
-    """Автоответ в ЛС + реакция 💤 — только один раз каждому"""
+class ReplyMod(loader.Module):
+    """Автоответчик с реакцией 💤 и настраиваемым сообщением в ЛС"""
 
-    strings = {"name": "reply"}
+    strings = {
+        "name": "Reply",
+        "enabled": "✅ Автоответ включен",
+        "disabled": "❌ Автоответ выключен",
+        "no_message": "⚠️ Сообщение для ответа не установлено. Используйте `.reply set <текст>`",
+        "set_message": "✏️ Сообщение для автоответа установлено:\n{}",
+        "usage": "Использование:\n.reply on - включить\n.reply off - выключить\n.reply set <текст> - установить сообщение"
+    }
 
     def __init__(self):
-        self.reply_enabled = True
-        self.reply_text = "Привет! Я сейчас не могу ответить."
-        self.replied_users = set()
+        self.config = {
+            "enabled": False,
+            "message": None
+        }
 
+    async def client_ready(self, client, db):
+        self.client = client
+        self.db = db
+        self.config["enabled"] = self.db.get(self.name, "enabled", False)
+        self.config["message"] = self.db.get(self.name, "message", None)
+
+    @loader.unrestricted
+    async def replycmd(self, message):
+        args = utils.get_args_raw(message)
+        if not args:
+            await message.edit(self.strings["usage"])
+            return
+
+        cmd, *text = args.split(" ", 1)
+        cmd = cmd.lower()
+
+        if cmd == "on":
+            if not self.config["message"]:
+                await message.edit(self.strings["no_message"])
+                return
+            self.config["enabled"] = True
+            self.db.set(self.name, "enabled", True)
+            await message.edit(self.strings["enabled"])
+
+        elif cmd == "off":
+            self.config["enabled"] = False
+            self.db.set(self.name, "enabled", False)
+            await message.edit(self.strings["disabled"])
+
+        elif cmd == "set":
+            if not text:
+                await message.edit("⚠️ Укажите сообщение после команды `.reply set`")
+                return
+            msg = text[0].strip()
+            self.config["message"] = msg
+            self.db.set(self.name, "message", msg)
+            await message.edit(self.strings["set_message"].format(msg))
+
+        else:
+            await message.edit(self.strings["usage"])
+
+    @loader.ratelimit
     async def watcher(self, message):
-        if not self.reply_enabled:
+        if not self.config["enabled"]:
             return
 
         if message.out:
             return
 
+        # Проверяем, что это ЛС
         if not message.is_private:
             return
 
-        sender = await message.get_sender()
-        if sender.bot or sender.system:
+        if not message.text:
             return
 
-        if message.sender_id in self.replied_users:
-            return
-
+        # Ставим реакцию
         try:
-            await asyncio.sleep(1)
             await message.react("💤")
-            await message.reply(self.reply_text)
-            self.replied_users.add(message.sender_id)
-        except Exception as e:
-            pass  # Можно заменить на print(str(e)) для отладки
+        except Exception:
+            pass
 
-    async def setreplycmd(self, message):
-        """Установить текст автоответа: .setreply <текст>"""
-        text = utils.get_args_raw(message)
-        if not text:
-            await message.edit("Укажи текст: .setreply <текст>")
-            return
-        self.reply_text = text
-        await message.edit(f"✅ Новый автоответ: {text}")
-
-    async def autoreplycmd(self, message):
-        """Вкл/выкл автоответ: .autoreply on/off"""
-        arg = utils.get_args_raw(message).lower()
-        if arg == "on":
-            self.reply_enabled = True
-            await message.edit("✅ Автоответ включён")
-        elif arg == "off":
-            self.reply_enabled = False
-            await message.edit("❌ Автоответ выключен")
-        else:
-            await message.edit("Используй: .autoreply on / off")
-
-    async def resetreplycmd(self, message):
-        """Сбросить список пользователей, которым уже отвечали"""
-        self.replied_users.clear()
-        await message.edit("🔄 Список сброшен.")
+        # Отвечаем текстом
+        try:
+            await message.reply(self.config["message"])
+        except Exception:
+            pass
