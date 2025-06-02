@@ -3,7 +3,7 @@ import asyncio
 
 @loader.tds
 class AutoReplyOnceMod(loader.Module):
-    """Отвечает только на первое сообщение каждого пользователя"""
+    """Отвечает в ЛС один раз + ставит реакцию 💤"""
 
     strings = {"name": "AutoReplyOnce"}
 
@@ -17,12 +17,20 @@ class AutoReplyOnceMod(loader.Module):
             return
         if message.out or not message.sender_id:
             return
+        if not message.is_private:  # Только ЛС
+            return
         if message.sender_id in self.replied_users:
             return
 
         try:
             await asyncio.sleep(1)
+
+            # Ставим реакцию 💤
+            await message.react("💤")
+
+            # Отвечаем сообщением
             await message.reply(self.reply_text)
+
             self.replied_users.add(message.sender_id)
         except:
             pass
