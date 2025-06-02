@@ -2,26 +2,28 @@ from .. import loader, utils
 import asyncio
 
 @loader.tds
-class AutoReplyMod(loader.Module):
-    """Простой автоответчик"""
+class AutoReplyOnceMod(loader.Module):
+    """Отвечает только на первое сообщение каждого пользователя"""
 
-    strings = {"name": "AutoReply"}
+    strings = {"name": "AutoReplyOnce"}
 
     def __init__(self):
         self.reply_enabled = True
-        self.reply_text = "Я сейчас не в сети."
+        self.reply_text = "Привет! Я сейчас не могу ответить."
+        self.replied_users = set()  # ID пользователей, кому уже отвечали
 
     async def watcher(self, message):
         if not self.reply_enabled:
             return
         if message.out or not message.sender_id:
             return
-        if message.sender.bot:
+        if message.sender_id in self.replied_users:
             return
 
-        await asyncio.sleep(1)
         try:
+            await asyncio.sleep(1)
             await message.reply(self.reply_text)
+            self.replied_users.add(message.sender_id)
         except:
             pass
 
@@ -35,11 +37,18 @@ class AutoReplyMod(loader.Module):
         await message.edit(f"✅ Новый автоответ: {text}")
 
     async def autoreplycmd(self, message):
-        """Включить или выключить автоответ: .autoreply on/off"""
+        """Вкл/выкл автоответ: .autoreply on/off"""
         arg = utils.get_args_raw(message).lower()
-        if arg not in ["on", "off"]:
+        if arg == "on":
+            self.reply_enabled = True
+            await message.edit("✅ Автоответ включён")
+        elif arg == "off":
+            self.reply_enabled = False
+            await message.edit("❌ Автоответ выключен")
+        else:
             await message.edit("Используй: .autoreply on / off")
-            return
-        self.reply_enabled = (arg == "on")
-        status = "включён" if self.reply_enabled else "выключен"
-        await message.edit(f"Автоответчик {status}")
+
+    async def resetreplycmd(self, message):
+        """Сбросить список пользователей, которым уже отвечали"""
+        self.replied_users.clear()
+        await message.edit("🗑 Список сброшен. Теперь снова будет отвечать на первое сообщение.")
