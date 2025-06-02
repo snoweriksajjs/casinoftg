@@ -1,63 +1,72 @@
-from telethon import events
 from .. import loader, utils
+from telethon.tl.types import Message
 
 @loader.tds
 class ReplyMod(loader.Module):
-    """Автоответчик в ЛС с реакцией 💤"""
+    """Автоответчик в ЛС с реакцией 💤 и настраиваемым текстом"""
 
     strings = {
         "name": "Reply",
-        "enabled": "✅ Автоответ включен",
-        "disabled": "❌ Автоответ выключен",
-        "no_message": "⚠️ Сообщение не установлено. .reply set <текст>",
-        "set_message": "✏️ Установлено сообщение:\n{}",
-        "usage": ".reply on/off/set <текст>"
+        "enabled": "✅ Автоответчик включён",
+        "disabled": "❌ Автоответчик выключен",
+        "no_message": "⚠️ Сообщение не задано. Используй `.reply set <текст>`",
+        "set_message": "✏️ Установлено сообщение автоответа:\n{}",
+        "usage": "Использование:\n.reply on\n.reply off\n.reply set <текст>"
     }
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            loader.ConfigValue(
-                "enabled", False, lambda: "Включить автоответ"
-            ),
-            loader.ConfigValue(
-                "message", "", lambda: "Текст автоответа"
-            )
+            loader.ConfigValue("enabled", False, lambda: "Включить автоответчик"),
+            loader.ConfigValue("message", "", lambda: "Сообщение автоответа")
         )
 
     @loader.unrestricted
-    async def replycmd(self, message):
+    async def replycmd(self, message: Message):
         args = utils.get_args_raw(message)
-        if not args:
-            return await message.edit(self.strings["usage"])
 
-        cmd, *text = args.split(" ", 1)
+        if not args:
+            await message.edit(self.strings("usage"))
+            return
+
+        cmd, *rest = args.split(" ", 1)
         cmd = cmd.lower()
 
         if cmd == "on":
             if not self.config["message"]:
-                return await message.edit(self.strings["no_message"])
+                await message.edit(self.strings("no_message"))
+                return
             self.config["enabled"] = True
-            return await message.edit(self.strings["enabled"])
+            await message.edit(self.strings("enabled"))
 
         elif cmd == "off":
             self.config["enabled"] = False
-            return await message.edit(self.strings["disabled"])
+            await message.edit(self.strings("disabled"))
 
-        elif cmd == "set" and text:
-            msg = text[0]
+        elif cmd == "set":
+            if not rest:
+                await message.edit("⚠️ Укажи сообщение после `.reply set <текст>`")
+                return
+            msg = rest[0].strip()
             self.config["message"] = msg
-            return await message.edit(self.strings["set_message"].format(msg))
+            await message.edit(self.strings("set_message").format(msg))
 
         else:
-            return await message.edit(self.strings["usage"])
+            await message.edit(self.strings("usage"))
 
-    async def watcher(self, message):
-        if not self.config["enabled"] or message.out or not message.is_private:
+    async def watcher(self, message: Message):
+        if (
+            not self.config["enabled"]
+            or message.out
+            or not message.is_private
+            or not message.text
+        ):
             return
+
         try:
             await message.react("💤")
         except:
             pass
+
         try:
             await message.reply(self.config["message"])
         except:
